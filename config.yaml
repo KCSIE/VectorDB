@@ -1,0 +1,15 @@
+name: "VectorDB"
+host: "127.0.0.1"
+port: 8080
+mode: "debug"
+version: "v0.1.1"
+
+log:
+  level: "debug"
+  filename: "api.log"
+  max_size: 1000
+  max_age: 3600
+  max_backups: 5
+
+db:
+  persist_path: "./vectordb_data"

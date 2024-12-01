@@ -1,0 +1,112 @@
+{
+  "dataset": "sift-128-euclidean",
+  "params": "efc_256_m_4_ef_32",
+  "results": {
+    "InsertQPS": 464.6573980547536,
+    "InsertLatency": 2152123,
+    "InsertDuration": 2152123272300,
+    "VectorCount": 1000000,
+    "SearchQPS": 2704.004498165563,
+    "SearchLatency": 369821,
+    "SearchDuration": 3698218700,
+    "Recall": 0.43720999999999977
+  }
+}
+{
+  "dataset": "sift-128-euclidean",
+  "params": "efc_256_m_8_ef_32",
+  "results": {
+    "InsertQPS": 321.14304749080094,
+    "InsertLatency": 3113877,
+    "InsertDuration": 3113877157900,
+    "VectorCount": 1000000,
+    "SearchQPS": 1488.3985214427696,
+    "SearchLatency": 671863,
+    "SearchDuration": 6718630700,
+    "Recall": 0.5771899999999974
+  }
+}
+{
+  "dataset": "sift-128-euclidean",
+  "params": "efc_256_m_12_ef_32",
+  "results": {
+    "InsertQPS": 256.15732712522254,
+    "InsertLatency": 3903850,
+    "InsertDuration": 3903850853000,
+    "VectorCount": 1000000,
+    "SearchQPS": 1294.6551650364909,
+    "SearchLatency": 772406,
+    "SearchDuration": 7724064500,
+    "Recall": 0.7932599999999881
+  }
+}
+{
+  "dataset": "sift-128-euclidean",
+  "params": "efc_256_m_16_ef_32",
+  "results": {
+    "InsertQPS": 190.10447370202584,
+    "InsertLatency": 5260265,
+    "InsertDuration": 5260265476800,
+    "VectorCount": 1000000,
+    "SearchQPS": 969.2278493200392,
+    "SearchLatency": 1031749,
+    "SearchDuration": 10317491400,
+    "Recall": 0.847009999999975
+  }
+}
+{
+  "dataset": "sift-128-euclidean",
+  "params": "efc_256_m_24_ef_32",
+  "results": {
+    "InsertQPS": 129.49322423118542,
+    "InsertLatency": 7722411,
+    "InsertDuration": 7722411778200,
+    "VectorCount": 1000000,
+    "SearchQPS": 740.6107498391301,
+    "SearchLatency": 1350236,
+    "SearchDuration": 13502369500,
+    "Recall": 0.8144299999999842
+  }
+}
+{
+  "dataset": "sift-128-euclidean",
+  "params": "efc_256_m_32_ef_32",
+  "results": {
+    "InsertQPS": 106.9529554400766,
+    "InsertLatency": 9349905,
+    "InsertDuration": 9349905254000,
+    "VectorCount": 1000000,
+    "SearchQPS": 603.5940573557527,
+    "SearchLatency": 1656742,
+    "SearchDuration": 16567426200,
+    "Recall": 0.92228999999997
+  }
+}
+{
+  "dataset": "sift-128-euclidean",
+  "params": "efc_256_m_40_ef_32",
+  "results": {
+    "InsertQPS": 85.12973992113636,
+    "InsertLatency": 11746776,
+    "InsertDuration": 11746776166900,
+    "VectorCount": 1000000,
+    "SearchQPS": 488.67160746565696,
+    "SearchLatency": 2046364,
+    "SearchDuration": 20463640300,
+    "Recall": 0.9368299999999732
+  }
+}
+{
+  "dataset": "sift-128-euclidean",
+  "params": "efc_256_m_48_ef_32",
+  "results": {
+    "InsertQPS": 71.1177767086205,
+    "InsertLatency": 14061181,
+    "InsertDuration": 14061181975600,
+    "VectorCount": 1000000,
+    "SearchQPS": 435.9253680948359,
+    "SearchLatency": 2293970,
+    "SearchDuration": 22939706500,
+    "Recall": 0.9478599999999752
+  }
+}

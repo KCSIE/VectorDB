@@ -1,0 +1,112 @@
+{
+  "dataset": "glove-50-angular",
+  "params": "efc_256_m_4_ef_32",
+  "results": {
+    "InsertQPS": 479.49165205436486,
+    "InsertLatency": 2085542,
+    "InsertDuration": 2468268206400,
+    "VectorCount": 1183514,
+    "SearchQPS": 2774.427348484777,
+    "SearchLatency": 360434,
+    "SearchDuration": 3604347400,
+    "Recall": 0.2798799999999976
+  }
+}
+{
+  "dataset": "glove-50-angular",
+  "params": "efc_256_m_8_ef_32",
+  "results": {
+    "InsertQPS": 319.6535749156988,
+    "InsertLatency": 3128386,
+    "InsertDuration": 3702489485100,
+    "VectorCount": 1183514,
+    "SearchQPS": 1718.7227985262089,
+    "SearchLatency": 581827,
+    "SearchDuration": 5818273900,
+    "Recall": 0.520699999999999
+  }
+}
+{
+  "dataset": "glove-50-angular",
+  "params": "efc_256_m_12_ef_32",
+  "results": {
+    "InsertQPS": 236.63209753325566,
+    "InsertLatency": 4225969,
+    "InsertDuration": 5001493932300,
+    "VectorCount": 1183514,
+    "SearchQPS": 1207.6438688180424,
+    "SearchLatency": 828058,
+    "SearchDuration": 8280586900,
+    "Recall": 0.6327799999999968
+  }
+}
+{
+  "dataset": "glove-50-angular",
+  "params": "efc_256_m_16_ef_32",
+  "results": {
+    "InsertQPS": 188.1292352728927,
+    "InsertLatency": 5315494,
+    "InsertDuration": 6290962690000,
+    "VectorCount": 1183514,
+    "SearchQPS": 1015.8542854549527,
+    "SearchLatency": 984393,
+    "SearchDuration": 9843931500,
+    "Recall": 0.7064099999999945
+  }
+}
+{
+  "dataset": "glove-50-angular",
+  "params": "efc_256_m_24_ef_32",
+  "results": {
+    "InsertQPS": 128.31619865659658,
+    "InsertLatency": 7793248,
+    "InsertDuration": 9223418495800,
+    "VectorCount": 1183514,
+    "SearchQPS": 699.1757473049082,
+    "SearchLatency": 1430255,
+    "SearchDuration": 14302555600,
+    "Recall": 0.7776899999999877
+  }
+}
+{
+  "dataset": "glove-50-angular",
+  "params": "efc_256_m_32_ef_32",
+  "results": {
+    "InsertQPS": 90.17313487993933,
+    "InsertLatency": 11089777,
+    "InsertDuration": 13124906898000,
+    "VectorCount": 1183514,
+    "SearchQPS": 549.1808171799576,
+    "SearchLatency": 1820893,
+    "SearchDuration": 18208939000,
+    "Recall": 0.8108099999999846
+  }
+}
+{
+  "dataset": "glove-50-angular",
+  "params": "efc_256_m_40_ef_32",
+  "results": {
+    "InsertQPS": 68.07078269899901,
+    "InsertLatency": 14690590,
+    "InsertDuration": 17386519635500,
+    "VectorCount": 1183514,
+    "SearchQPS": 447.52920157129654,
+    "SearchLatency": 2234491,
+    "SearchDuration": 22344910600,
+    "Recall": 0.837419999999985
+  }
+}
+{
+  "dataset": "glove-50-angular",
+  "params": "efc_256_m_48_ef_32",
+  "results": {
+    "InsertQPS": 59.14728827506273,
+    "InsertLatency": 16906945,
+    "InsertDuration": 20009607109900,
+    "VectorCount": 1183514,
+    "SearchQPS": 357.36723782099244,
+    "SearchLatency": 2798241,
+    "SearchDuration": 27982419600,
+    "Recall": 0.8584599999999833
+  }
+}
