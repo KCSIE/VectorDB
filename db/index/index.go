@@ -7,7 +7,7 @@ import (
 	"vectordb/model"
 )
 
-// todo: update index, load index and save index
+// todo: snapshot to load and save index?
 type Indexer interface {
 	Insert(id string, vector []float32) error
 	Delete(id string) error
