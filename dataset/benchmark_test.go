@@ -150,7 +150,7 @@ func BenchmarkHNSW(b *testing.B) {
 	if err != nil {
 		b.Fatal(err)
 	}
-	dname := "nytimes-256-angular"
+	dname := "lastfm-65-dot"
 	path := filepath.Join(wd, dname, dname)
 	dataset, err := readDataset(path)
 	if err != nil {
