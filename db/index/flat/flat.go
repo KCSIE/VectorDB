@@ -17,7 +17,7 @@ type Flat struct {
 
 func NewFlat(params *model.FlatParams, distance string) (*Flat, error) {
 	f := &Flat{
-		vectors: make(map[string][]float32),
+		vectors: make(map[string][]float32, params.MaxSize),
 		maxSize: params.MaxSize,
 	}
 	switch distance {
@@ -38,7 +38,7 @@ func (f *Flat) Insert(id string, vector []float32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
-	if len(f.vectors) > f.maxSize {
+	if len(f.vectors) >= f.maxSize {
 		return fmt.Errorf("flat index is full")
 	}
 	f.vectors[id] = vector
@@ -49,6 +49,11 @@ func (f *Flat) Delete(id string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
+	_, exists := f.vectors[id]
+	if !exists {
+		return fmt.Errorf("id %s not found in index", id)
+	}
+
 	delete(f.vectors, id)
 	return nil
 }
@@ -56,6 +61,11 @@ func (f *Flat) Delete(id string) error {
 func (f *Flat) Update(id string, vector []float32) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+
+	_, exists := f.vectors[id]
+	if !exists {
+		return fmt.Errorf("id %s not found in index", id)
+	}
 
 	f.vectors[id] = vector
 	return nil

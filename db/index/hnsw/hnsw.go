@@ -138,7 +138,7 @@ func (h *HNSW) Delete(id string) error {
 
 	idx, exists := h.nodesidx[id]
 	if !exists {
-		return fmt.Errorf("node with id %s not found in index", id)
+		return fmt.Errorf("id %s not found in index", id)
 	}
 	node := h.nodes[idx]
 
@@ -180,6 +180,11 @@ func (h *HNSW) Delete(id string) error {
 }
 
 func (h *HNSW) Update(id string, vector []float32) error {
+	_, exists := h.nodesidx[id]
+	if !exists {
+		return fmt.Errorf("id %s not found in index", id)
+	}
+
 	h.Delete(id)
 	return h.Insert(id, vector)
 }
