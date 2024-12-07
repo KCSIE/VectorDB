@@ -17,7 +17,7 @@ type HNSW struct {
 	m              int            // number of established connections, the number of nearest neighbors to connect a new entry to when it is inserted
 	mmax           int            // maximum number of connections for each element per layer except layer 0, normally set mmax = m
 	mmax0          int            // maximum number of connections for each element at layer 0, normally set mmax0 = 2*m
-	ml             float64        // normalization factor for level generation, normally set ml = 1 / lg(m)
+	ml             float64        // normalization factor for level generation, normally set ml = 1 / ln(m)
 	heuristic      bool           // whether to select neighbors using the heuristic method or simple method
 	extend         bool           // whether to extend candidates when using heuristic
 	entrypoint     *Node          // entry point for the index
