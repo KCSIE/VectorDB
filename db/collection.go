@@ -142,10 +142,10 @@ func (c *Collection) Close() error {
 	return nil
 }
 
-func (c *Collection) insertObject(tx *bbolt.Tx, obj *model.ReqInsertObject) error {
+func (c *Collection) insertObject(tx *bbolt.Tx, obj *model.ReqInsertObject) (string, error) {
 	id, err := pkg.NewUUID()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	entry := WALEntry{
@@ -155,12 +155,12 @@ func (c *Collection) insertObject(tx *bbolt.Tx, obj *model.ReqInsertObject) erro
 	}
 	walData, err := pkg.Serialize(entry)
 	if err != nil {
-		return fmt.Errorf("failed to serialize WAL entry: %w", err)
+		return "", fmt.Errorf("failed to serialize WAL entry: %w", err)
 	}
 
 	c.seq++
 	if err := c.wal.Write(c.seq, walData); err != nil {
-		return fmt.Errorf("failed to write to WAL: %w", err)
+		return "", fmt.Errorf("failed to write to WAL: %w", err)
 	}
 
 	colBucket := tx.Bucket([]byte(c.name))
@@ -168,62 +168,75 @@ func (c *Collection) insertObject(tx *bbolt.Tx, obj *model.ReqInsertObject) erro
 
 	objBytes, err := pkg.Serialize(obj)
 	if err != nil {
-		return fmt.Errorf("failed to serialize object: %w", err)
+		return "", fmt.Errorf("failed to serialize object: %w", err)
 	}
 
 	if err := objBucket.Put([]byte(id), objBytes); err != nil {
-		return fmt.Errorf("failed to put object under collection '%s': %w", c.name, err)
+		return "", fmt.Errorf("failed to put object under collection '%s': %w", c.name, err)
 	}
 
 	if err := c.index.Insert(id, obj.Vector); err != nil {
-		return err
+		return "", err
 	}
 
-	return nil
+	return id, nil
 }
 
-func (c *Collection) InsertObject(obj *model.ReqInsertObject) error {
+func (c *Collection) InsertObject(obj *model.ReqInsertObject) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	var id string
 	if err := db.kv.Update(func(tx *bbolt.Tx) error {
-		return c.insertObject(tx, obj)
+		var err error
+		id, err = c.insertObject(tx, obj)
+		return err
 	}); err != nil {
-		return fmt.Errorf("failed to insert object into collection '%s': %w", c.name, err)
+		return "", fmt.Errorf("failed to insert object into collection '%s': %w", c.name, err)
 	}
 
-	return nil
+	return id, nil
 }
 
-func (c *Collection) InsertObjects(objs []model.ReqInsertObject) error {
+func (c *Collection) InsertObjects(objs []model.ReqInsertObject) ([]string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	n := len(objs)
-	ch := make(chan error, n)
+	type result struct {
+		pos int
+		id  string
+		err error
+	}
+	ch := make(chan result, n)
 	var wg sync.WaitGroup
+	ids := make([]string, n)
 
 	for i := 0; i < n; i++ {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
+			var id string
 			err := db.kv.Batch(func(tx *bbolt.Tx) error {
-				return c.insertObject(tx, &objs[i])
+				var err error
+				id, err = c.insertObject(tx, &objs[i])
+				return err
 			})
-			ch <- err
+			ch <- result{pos: i, id: id, err: err}
 		}(i)
 	}
 
 	wg.Wait()
 	close(ch)
 
-	for err := range ch {
-		if err != nil {
-			return err
+	for res := range ch {
+		if res.err != nil {
+			return nil, res.err
 		}
+		ids[res.pos] = res.id
 	}
 
-	return nil
+	return ids, nil
 }
 
 func (c *Collection) DeleteObject(objid string) error {

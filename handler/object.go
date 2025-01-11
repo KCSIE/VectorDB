@@ -18,7 +18,8 @@ func InsertObject(c *gin.Context) {
 		return
 	}
 
-	if err := db.QueryInsertObject(col, obj); err != nil {
+	id, err := db.QueryInsertObject(col, obj)
+	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
@@ -28,6 +29,9 @@ func InsertObject(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
 		"message": "object inserted",
+		"data": gin.H{
+			"id": id,
+		},
 	})
 }
 
@@ -41,7 +45,8 @@ func InsertObjects(c *gin.Context) {
 		return
 	}
 
-	if err := db.QueryInsertObjects(col, objs); err != nil {
+	ids, err := db.QueryInsertObjects(col, objs)
+	if err != nil {
 		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
 			"error": err.Error(),
 		})
@@ -51,6 +56,9 @@ func InsertObjects(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"status":  "ok",
 		"message": "objects inserted",
+		"data": gin.H{
+			"ids": ids,
+		},
 	})
 }
 

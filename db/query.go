@@ -63,36 +63,38 @@ func QueryGetCollectionInfo(colname string) (model.ResCollectionInfo, error) {
 	return info, nil
 }
 
-func QueryInsertObject(colname string, obj *model.ReqInsertObject) error {
+func QueryInsertObject(colname string, obj *model.ReqInsertObject) (string, error) {
 	col, err := getCollection(colname)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if err := col.validateObjectMeta([]model.ReqInsertObject{*obj}); err != nil {
-		return err
+		return "", err
 	}
 
-	if err := col.InsertObject(obj); err != nil {
-		return err
+	id, err := col.InsertObject(obj)
+	if err != nil {
+		return "", err
 	}
 
-	return nil
+	return id, nil
 }
 
-func QueryInsertObjects(colname string, objs *model.ReqInsertObjects) error {
+func QueryInsertObjects(colname string, objs *model.ReqInsertObjects) ([]string, error) {
 	col, err := getCollection(colname)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := col.validateObjectMeta(objs.Objects); err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := col.InsertObjects(objs.Objects); err != nil {
-		return err
+	ids, err := col.InsertObjects(objs.Objects)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil
+	return ids, nil
 }
 
 func QueryDeleteObject(colname string, objid string) error {
