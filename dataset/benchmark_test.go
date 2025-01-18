@@ -13,6 +13,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"vectordb/db/index"
 	"vectordb/db/index/hnsw"
 	"vectordb/model"
 
@@ -35,14 +36,14 @@ type Dataset struct {
 }
 
 type BenchmarkResult struct {
-	InsertQPS      float64
-	InsertLatency  time.Duration
-	InsertDuration time.Duration
-	VectorCount    int
-	SearchQPS      float64
-	SearchLatency  time.Duration
-	SearchDuration time.Duration
-	Recall         float64
+	InsertQPS      float64       `json:"insert_qps"`
+	InsertLatency  time.Duration `json:"insert_latency"`
+	InsertDuration time.Duration `json:"insert_duration"`
+	VectorCount    int           `json:"vector_count"`
+	SearchQPS      float64       `json:"search_qps"`
+	SearchLatency  time.Duration `json:"search_latency"`
+	SearchDuration time.Duration `json:"search_duration"`
+	Recall         float64       `json:"recall"`
 }
 
 func uuidFromInt(val int) string {
@@ -144,85 +145,6 @@ func calculateRecall(groundTruth []string, results []model.SearchResult, k int) 
 	return float64(hits) / float64(k)
 }
 
-// go test -bench=^BenchmarkHNSW$ -benchmem -timeout=16h -count=1 ./dataset
-func BenchmarkHNSW(b *testing.B) {
-	wd, err := os.Getwd()
-	if err != nil {
-		b.Fatal(err)
-	}
-	dname := "lastfm-65-dot"
-	path := filepath.Join(wd, dname, dname)
-	dataset, err := readDataset(path)
-	if err != nil {
-		b.Fatal(err)
-	}
-
-	params := []struct {
-		efConstruction int
-		maxConnections int
-		ef             int
-	}{
-		{256, 4, 32},
-		{256, 8, 32},
-		{256, 12, 32},
-		{256, 16, 32},
-		{256, 24, 32},
-		{256, 32, 32},
-		{256, 40, 32},
-		{256, 48, 32},
-	}
-
-	log.Printf("Dataset: %s, Dimension: %d, Distance: %s", dataset.Name, dataset.Dimension, dataset.Distance)
-	log.Printf("Build Set size: %d, Query Set size: %d", len(dataset.Train), len(dataset.Test))
-	log.Printf("CPU Cores: %d", runtime.NumCPU())
-
-	for _, p := range params {
-		paramstring := fmt.Sprintf("efc_%d_m_%d_ef_%d", p.efConstruction, p.maxConnections, p.ef)
-		b.Run(paramstring, func(b *testing.B) {
-			result := runHnswBenchmark(dataset, p.efConstruction, p.maxConnections, p.ef, 10) // topk = 10 here
-			dumpHNSWResult(result, dname, paramstring)
-			logBenchmarkResults(result)
-		})
-	}
-}
-
-func runHnswBenchmark(dataset *Dataset, efConstruction, maxConnections, ef int, topk int) *BenchmarkResult {
-	result := &BenchmarkResult{}
-
-	params := &model.HNSWParams{
-		EfConstruction: efConstruction,
-		MMax:           maxConnections,
-		Heuristic:      true,
-		Extend:         false,
-		MaxSize:        len(dataset.Train) + 1,
-	}
-	index, _ := hnsw.NewHNSW(params, dataset.Distance)
-
-	startTime := time.Now()
-	// no significant improvement if use goroutine since lock contention, todo: improve coarse lock in hnsw
-	for i, vec := range dataset.Train {
-		index.Insert(uuidFromInt(i), vec)
-	}
-	result.InsertDuration = time.Since(startTime)
-	result.VectorCount = len(dataset.Train)
-	result.InsertQPS = float64(result.VectorCount) / result.InsertDuration.Seconds()
-	result.InsertLatency = result.InsertDuration / time.Duration(result.VectorCount)
-
-	var totalRecall float64
-	startTime = time.Now()
-	for i, query := range dataset.Test {
-		searchParams := map[string]any{"ef": ef}
-		results, _ := index.Search(query, topk, searchParams)
-		totalRecall += calculateRecall(dataset.Neighbours[i], results, topk)
-	}
-	result.SearchDuration = time.Since(startTime)
-	result.SearchQPS = float64(len(dataset.Test)) / result.SearchDuration.Seconds()
-	result.SearchLatency = result.SearchDuration / time.Duration(len(dataset.Test))
-	result.Recall = totalRecall / float64(len(dataset.Test))
-
-	return result
-}
-
 func logBenchmarkResults(result *BenchmarkResult) {
 	log.Printf("Insert Phase:")
 	log.Printf("  QPS: %.2f", result.InsertQPS)
@@ -236,41 +158,147 @@ func logBenchmarkResults(result *BenchmarkResult) {
 	log.Printf("  Total Duration: %v", result.SearchDuration)
 }
 
-func dumpHNSWResult(result *BenchmarkResult, name string, paramstring string) {
-	data := struct {
-		Dataset string           `json:"dataset"`
-		Params  string           `json:"params"`
-		Results *BenchmarkResult `json:"results"`
-	}{
-		Dataset: name,
-		Params:  paramstring,
-		Results: result,
+func dumpResult(result *BenchmarkResult, name string, indexType string, paramstring string) {
+	type BenchmarkOutput struct {
+		Dataset   string                     `json:"dataset"`
+		IndexType string                     `json:"index_type"`
+		Cases     map[string]BenchmarkResult `json:"cases"`
 	}
 
-	jsonData, err := json.MarshalIndent(data, "", "  ")
+	resultsPath := filepath.Join(name, "benchmark_results.json")
+
+	var output BenchmarkOutput
+	if data, err := os.ReadFile(resultsPath); err == nil {
+		if err := json.Unmarshal(data, &output); err != nil {
+			output = BenchmarkOutput{
+				Cases: make(map[string]BenchmarkResult),
+			}
+		}
+	} else {
+		output = BenchmarkOutput{
+			Cases: make(map[string]BenchmarkResult),
+		}
+	}
+	output.Dataset = name
+	output.IndexType = indexType
+	output.Cases[paramstring] = *result
+
+	jsonData, err := json.MarshalIndent(output, "", "  ")
 	if err != nil {
 		log.Printf("Error marshaling results: %v", err)
 		return
 	}
 
-	resultsPath := filepath.Join(name, "hnsw_benchmark_results.txt")
-	f, err := os.OpenFile(resultsPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		log.Printf("Error opening results file: %v", err)
-		return
-	}
-	defer f.Close()
-
-	fi, err := f.Stat()
-	if err == nil && fi.Size() > 0 {
-		if _, err := f.WriteString("\n"); err != nil {
-			log.Printf("Error writing newline: %v", err)
-			return
-		}
-	}
-
-	if _, err := f.Write(jsonData); err != nil {
+	if err := os.WriteFile(resultsPath, jsonData, 0644); err != nil {
 		log.Printf("Error writing results: %v", err)
 		return
+	}
+}
+
+// MODIFY HERE: make change since this line if there is new index type
+func formatParamString(indexType string, p interface{}) string {
+	switch indexType {
+	case "hnsw":
+		return fmt.Sprintf("efc_%d_m_%d_ef_%d", p.(HNSWConfig).efConstruction, p.(HNSWConfig).maxConnections, p.(HNSWConfig).ef)
+	default:
+		return "unknown"
+	}
+}
+
+func runBenchmark(dataset *Dataset, indexType string, p interface{}, topk int) *BenchmarkResult {
+	result := &BenchmarkResult{}
+	var index index.Indexer
+	var searchParams map[string]any
+
+	switch indexType {
+	case "hnsw":
+		params := &model.HNSWParams{
+			EfConstruction: p.(HNSWConfig).efConstruction,
+			MMax:           p.(HNSWConfig).maxConnections,
+			Heuristic:      true,
+			Extend:         false,
+			MaxSize:        len(dataset.Train) + 1,
+		}
+		index, _ = hnsw.NewHNSW(params, dataset.Distance)
+		searchParams = map[string]any{"ef": p.(HNSWConfig).ef}
+	}
+
+	startTime := time.Now()
+	for i, vec := range dataset.Train {
+		index.Insert(uuidFromInt(i), vec)
+	}
+	result.InsertDuration = time.Since(startTime)
+	result.VectorCount = len(dataset.Train)
+	result.InsertQPS = float64(result.VectorCount) / result.InsertDuration.Seconds()
+	result.InsertLatency = result.InsertDuration / time.Duration(result.VectorCount)
+
+	var totalRecall float64
+	startTime = time.Now()
+	for i, query := range dataset.Test {
+		results, _ := index.Search(query, topk, searchParams)
+		totalRecall += calculateRecall(dataset.Neighbours[i], results, topk)
+	}
+	result.SearchDuration = time.Since(startTime)
+	result.SearchQPS = float64(len(dataset.Test)) / result.SearchDuration.Seconds()
+	result.SearchLatency = result.SearchDuration / time.Duration(len(dataset.Test))
+	result.Recall = totalRecall / float64(len(dataset.Test))
+
+	return result
+}
+
+type HNSWConfig struct {
+	efConstruction int
+	maxConnections int
+	ef             int
+}
+
+// type NewIndexConfig struct {
+// 	todo int
+// }
+
+// RUN: go test -bench=^BenchmarkIndex$ -benchmem -timeout=16h -count=1 ./dataset
+func BenchmarkIndex(b *testing.B) {
+	config := struct {
+		dataset   string
+		topk      int
+		indexType string
+		params    []HNSWConfig
+	}{
+		dataset:   "lastfm-65-dot",
+		topk:      10,
+		indexType: "hnsw",
+		params: []HNSWConfig{
+			{256, 4, 32},
+			{256, 8, 32},
+			{256, 12, 32},
+			{256, 16, 32},
+			{256, 24, 32},
+			{256, 32, 32},
+			{256, 40, 32},
+			{256, 48, 32},
+		},
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		b.Fatal(err)
+	}
+	path := filepath.Join(wd, config.dataset, config.dataset)
+	dataset, err := readDataset(path)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	log.Printf("Dataset: %s, Dimension: %d, Distance: %s", dataset.Name, dataset.Dimension, dataset.Distance)
+	log.Printf("Build Set size: %d, Query Set size: %d", len(dataset.Train), len(dataset.Test))
+	log.Printf("CPU Cores: %d", runtime.NumCPU())
+
+	for _, p := range config.params {
+		paramstring := formatParamString(config.indexType, p)
+		b.Run(paramstring, func(b *testing.B) {
+			result := runBenchmark(dataset, config.indexType, p, config.topk)
+			dumpResult(result, config.dataset, config.indexType, paramstring)
+			logBenchmarkResults(result)
+		})
 	}
 }
