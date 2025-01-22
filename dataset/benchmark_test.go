@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 	"vectordb/db/index"
@@ -223,10 +224,28 @@ func runBenchmark(dataset *Dataset, indexType string, p interface{}, topk int) *
 		searchParams = map[string]any{"ef": p.(HNSWConfig).ef}
 	}
 
+	workers := runtime.NumCPU() / 2
+
 	startTime := time.Now()
-	for i, vec := range dataset.Train {
-		index.Insert(uuidFromInt(i), vec)
+	// for i, vec := range dataset.Train {
+	// 	index.Insert(uuidFromInt(i), vec)
+	// }
+	insertTasks := make(chan int, len(dataset.Train))
+	var insertWg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		insertWg.Add(1)
+		go func(workerID int) {
+			defer insertWg.Done()
+			for t := range insertTasks {
+				index.Insert(uuidFromInt(t), dataset.Train[t])
+			}
+		}(i)
 	}
+	for i := range dataset.Train {
+		insertTasks <- i
+	}
+	close(insertTasks)
+	insertWg.Wait()
 	result.InsertDuration = time.Since(startTime)
 	result.VectorCount = len(dataset.Train)
 	result.InsertQPS = float64(result.VectorCount) / result.InsertDuration.Seconds()
@@ -234,9 +253,30 @@ func runBenchmark(dataset *Dataset, indexType string, p interface{}, topk int) *
 
 	var totalRecall float64
 	startTime = time.Now()
-	for i, query := range dataset.Test {
-		results, _ := index.Search(query, topk, searchParams)
-		totalRecall += calculateRecall(dataset.Neighbours[i], results, topk)
+	// for i, query := range dataset.Test {
+	// 	results, _ := index.Search(query, topk, searchParams)
+	// 	totalRecall += calculateRecall(dataset.Neighbours[i], results, topk)
+	// }
+	searchTasks := make(chan int, len(dataset.Test))
+	recalls := make([]float64, workers)
+	var searchWg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		searchWg.Add(1)
+		go func(workerID int) {
+			defer searchWg.Done()
+			for t := range searchTasks {
+				results, _ := index.Search(dataset.Test[t], topk, searchParams)
+				recalls[workerID] += calculateRecall(dataset.Neighbours[t], results, topk)
+			}
+		}(i)
+	}
+	for i := range dataset.Test {
+		searchTasks <- i
+	}
+	close(searchTasks)
+	searchWg.Wait()
+	for _, recall := range recalls {
+		totalRecall += recall
 	}
 	result.SearchDuration = time.Since(startTime)
 	result.SearchQPS = float64(len(dataset.Test)) / result.SearchDuration.Seconds()
@@ -268,14 +308,11 @@ func BenchmarkIndex(b *testing.B) {
 		topk:      10,
 		indexType: "hnsw",
 		params: []HNSWConfig{
-			{256, 4, 32},
-			{256, 8, 32},
-			{256, 12, 32},
-			{256, 16, 32},
-			{256, 24, 32},
-			{256, 32, 32},
-			{256, 40, 32},
-			{256, 48, 32},
+			{256, 8, 64},
+			{256, 16, 64},
+			{256, 24, 64},
+			{256, 32, 64},
+			{256, 40, 64},
 		},
 	}
 

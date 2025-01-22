@@ -6,24 +6,27 @@ import (
 	"math"
 	"math/rand/v2"
 	"sync"
+	"sync/atomic"
 	"vectordb/model"
 	"vectordb/pkg"
+
+	cmap "github.com/orcaman/concurrent-map/v2"
 )
 
 type HNSW struct {
 	distfunc       func([]float32, []float32) float32
 	maxSize        int
-	efconstruction int            // size of dynamic candidate list, the number of nearest neighbors to keep in a priority queue for insertion
-	m              int            // number of established connections, the number of nearest neighbors to connect a new entry to when it is inserted
-	mmax           int            // maximum number of connections for each element per layer except layer 0, normally set mmax = m
-	mmax0          int            // maximum number of connections for each element at layer 0, normally set mmax0 = 2*m
-	ml             float64        // normalization factor for level generation, normally set ml = 1 / ln(m)
-	heuristic      bool           // whether to select neighbors using the heuristic method or simple method
-	extend         bool           // whether to extend candidates when using heuristic
-	entrypoint     *Node          // entry point for the index
-	maxlevel       int            // current maximum level used
-	nodes          []*Node        // all nodes in the hnsw graph
-	nodesidx       map[string]int // map from id to nodes index
+	efconstruction int                             // size of dynamic candidate list, the number of nearest neighbors to keep in a priority queue for insertion
+	m              int                             // number of established connections, the number of nearest neighbors to connect a new entry to when it is inserted
+	mmax           int                             // maximum number of connections for each element per layer except layer 0, normally set mmax = m
+	mmax0          int                             // maximum number of connections for each element at layer 0, normally set mmax0 = 2*m
+	ml             float64                         // normalization factor for level generation, normally set ml = 1 / ln(m)
+	heuristic      bool                            // whether to select neighbors using the heuristic method or simple method
+	extend         bool                            // whether to extend candidates when using heuristic
+	entrypoint     atomic.Pointer[Node]            // entry point for the index
+	maxlevel       atomic.Int32                    // current maximum level used
+	nodes          []*Node                         // all nodes in the hnsw graph
+	nodesidx       cmap.ConcurrentMap[string, int] // map from id to nodes index
 	mu             sync.RWMutex
 }
 
@@ -32,6 +35,7 @@ type Node struct {
 	vector      []float32
 	level       int
 	connections [][]string
+	mu          sync.RWMutex
 }
 
 // set default parameters
@@ -54,7 +58,7 @@ func NewHNSW(params *model.HNSWParams, distance string) (*HNSW, error) {
 		heuristic:      params.Heuristic,
 		extend:         params.Extend,
 		nodes:          []*Node{},
-		nodesidx:       make(map[string]int),
+		nodesidx:       cmap.New[int](),
 	}
 	switch distance {
 	case "dot":
@@ -71,35 +75,36 @@ func NewHNSW(params *model.HNSWParams, distance string) (*HNSW, error) {
 }
 
 func (h *HNSW) Insert(id string, vector []float32) error {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
 	if len(h.nodes) >= h.maxSize {
 		return fmt.Errorf("hnsw index is full")
 	}
 
+	h.mu.Lock()
 	if len(h.nodes) == 0 {
 		node := newNode(id, vector, 0)
 		h.nodes = append(h.nodes, node)
-		h.nodesidx[id] = len(h.nodes) - 1
-		h.entrypoint = node
-		h.maxlevel = 0
+		h.nodesidx.Set(id, len(h.nodes)-1)
+		h.entrypoint.Store(node)
+		h.maxlevel.Store(0)
+		h.mu.Unlock()
 		return nil
 	}
 
 	level := int(math.Floor(-math.Log(rand.Float64()) * h.ml))
 	node := newNode(id, vector, level)
 	h.nodes = append(h.nodes, node)
-	h.nodesidx[id] = len(h.nodes) - 1
+	h.nodesidx.Set(id, len(h.nodes)-1)
+	ep := h.entrypoint.Load()
+	currMaxLevel := h.maxlevel.Load()
+	h.mu.Unlock()
 
-	ep := h.entrypoint
 	// look up entry point in greedy search, find shortest path from top layer(max level) above the current level
-	for l := h.maxlevel; l > level; l-- {
-		ep = h.searchLayerClosest(node.vector, ep, l)
+	for l := currMaxLevel; l > int32(level); l-- {
+		ep = h.searchLayerClosest(node.vector, ep, int(l))
 	}
 
 	// look up closest neighbours and create connections, from the current level to level 0
-	for l := min(level, h.maxlevel); l >= 0; l-- {
+	for l := min(level, int(currMaxLevel)); l >= 0; l-- {
 		resultspq := h.searchLayer(node.vector, ep, h.efconstruction, l) // maxpq here
 
 		if h.heuristic {
@@ -123,9 +128,11 @@ func (h *HNSW) Insert(id string, vector []float32) error {
 		}
 	}
 
-	if level > h.maxlevel {
-		h.maxlevel = level
-		h.entrypoint = node
+	if level > int(h.maxlevel.Load()) {
+		h.mu.Lock()
+		h.maxlevel.Store(int32(level))
+		h.entrypoint.Store(node)
+		h.mu.Unlock()
 	}
 
 	return nil
@@ -136,15 +143,16 @@ func (h *HNSW) Delete(id string) error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	idx, exists := h.nodesidx[id]
+	idx, exists := h.nodesidx.Get(id)
 	if !exists {
 		return fmt.Errorf("id %s not found in index", id)
 	}
 	node := h.nodes[idx]
 
-	ep := h.entrypoint
-	for l := h.maxlevel; l > node.level; l-- {
-		ep = h.searchLayerClosest(node.vector, ep, l)
+	ep := h.entrypoint.Load()
+	currMaxLevel := h.maxlevel.Load()
+	for l := currMaxLevel; l > int32(node.level); l-- {
+		ep = h.searchLayerClosest(node.vector, ep, int(l))
 	}
 
 	for l := node.level; l >= 0; l-- {
@@ -153,6 +161,7 @@ func (h *HNSW) Delete(id string) error {
 		ep = resultspq.Top().(*pkg.Item).Node.(*Node)
 		for resultspq.Len() > 0 {
 			neighbour := heap.Pop(resultspq).(*pkg.Item).Node.(*Node)
+			neighbour.mu.Lock()
 			newneighbours := []string{}
 			for _, neighbourID := range neighbour.connections[l] {
 				if neighbourID != node.id {
@@ -160,27 +169,34 @@ func (h *HNSW) Delete(id string) error {
 				}
 			}
 			neighbour.connections[l] = newneighbours
+			neighbour.mu.Unlock()
 		}
+		node.mu.Lock()
 		node.connections[l] = nil
+		node.mu.Unlock()
 	}
 
 	// infinity distance
+	node.mu.Lock()
 	for i := 0; i < len(node.vector); i++ {
 		node.vector[i] = float32(math.MaxFloat32)
 	}
+	node.mu.Unlock()
 
 	for i := idx; i < len(h.nodes)-1; i++ {
-		h.nodesidx[h.nodes[i+1].id] = i
+		h.nodesidx.Set(h.nodes[i+1].id, i)
 	}
 	copy(h.nodes[idx:], h.nodes[idx+1:])
 	h.nodes = h.nodes[:len(h.nodes)-1]
-	delete(h.nodesidx, id)
+	h.nodesidx.Remove(id)
 
 	return nil
 }
 
 func (h *HNSW) Update(id string, vector []float32) error {
-	_, exists := h.nodesidx[id]
+	h.mu.Lock()
+	_, exists := h.nodesidx.Get(id)
+	h.mu.Unlock()
 	if !exists {
 		return fmt.Errorf("id %s not found in index", id)
 	}
@@ -191,8 +207,6 @@ func (h *HNSW) Update(id string, vector []float32) error {
 
 func (h *HNSW) Search(vector []float32, topk int, xparams map[string]interface{}) ([]model.SearchResult, error) {
 	h.mu.RLock()
-	defer h.mu.RUnlock()
-
 	if len(h.nodes) == 0 {
 		return nil, nil
 	}
@@ -209,9 +223,12 @@ func (h *HNSW) Search(vector []float32, topk int, xparams map[string]interface{}
 		}
 	}
 
-	ep := h.entrypoint
-	for l := h.maxlevel; l > 0; l-- {
-		ep = h.searchLayerClosest(vector, ep, l)
+	ep := h.entrypoint.Load()
+	currMaxLevel := h.maxlevel.Load()
+	h.mu.RUnlock()
+
+	for l := currMaxLevel; l > 0; l-- {
+		ep = h.searchLayerClosest(vector, ep, int(l))
 	}
 
 	resultspq := h.searchLayer(vector, ep, ef, 0) // maxpq here
@@ -257,8 +274,12 @@ func (h *HNSW) searchLayerClosest(q []float32, ep *Node, level int) *Node {
 	mindist := h.distfunc(q, ep.vector)
 	for {
 		findClosest := false
-		for _, neighbourID := range ep.connections[level] {
-			neighbour := h.nodes[h.nodesidx[neighbourID]]
+		ep.mu.RLock()
+		connections := ep.connections[level]
+		ep.mu.RUnlock()
+		for _, neighbourID := range connections {
+			idx, _ := h.nodesidx.Get(neighbourID)
+			neighbour := h.nodes[idx]
 			if dist := h.distfunc(q, neighbour.vector); dist < mindist {
 				mindist = dist
 				ep = neighbour
@@ -294,8 +315,12 @@ func (h *HNSW) searchLayer(q []float32, ep *Node, ef int, level int) *pkg.Priori
 			break
 		}
 
-		for _, neighbourID := range candidate.Node.(*Node).connections[level] {
-			neighbour := h.nodes[h.nodesidx[neighbourID]]
+		candidate.Node.(*Node).mu.RLock()
+		connections := candidate.Node.(*Node).connections[level]
+		candidate.Node.(*Node).mu.RUnlock()
+		for _, neighbourID := range connections {
+			idx, _ := h.nodesidx.Get(neighbourID)
+			neighbour := h.nodes[idx]
 			if _, contained := visited[neighbourID]; contained {
 				continue
 			}
@@ -354,7 +379,8 @@ func (h *HNSW) selectNeighboursHeuristic(q []float32, candidates *pkg.PriorityQu
 			for _, neighbourID := range e.connections[level] {
 				if _, contained := visited[neighbourID]; !contained {
 					visited[neighbourID] = struct{}{}
-					neighbour := h.nodes[h.nodesidx[neighbourID]]
+					idx, _ := h.nodesidx.Get(neighbourID)
+					neighbour := h.nodes[idx]
 					heap.Push(candidatesext, pkg.NewItem(neighbour, h.distfunc(q, neighbour.vector)))
 				}
 			}
@@ -389,16 +415,24 @@ func (h *HNSW) selectNeighboursHeuristic(q []float32, candidates *pkg.PriorityQu
 }
 
 func (h *HNSW) addConnections(node *Node, neighbour *Node, level int) {
+	node.mu.Lock()
+	neighbour.mu.Lock()
 	node.connections[level] = append(node.connections[level], neighbour.id)
 	neighbour.connections[level] = append(neighbour.connections[level], node.id)
+	neighbour.mu.Unlock()
+	node.mu.Unlock()
 }
 
 func (h *HNSW) shrink(node *Node, m int, level int) {
+	node.mu.Lock()
+	defer node.mu.Unlock()
+
 	nodeneighbours := pkg.NewMaxPQ()
 	heap.Init(nodeneighbours)
 
 	for _, neighbourID := range node.connections[level] {
-		neighbour := h.nodes[h.nodesidx[neighbourID]]
+		idx, _ := h.nodesidx.Get(neighbourID)
+		neighbour := h.nodes[idx]
 		heap.Push(nodeneighbours, pkg.NewItem(neighbour, h.distfunc(neighbour.vector, node.vector)))
 	}
 

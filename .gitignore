@@ -1,3 +1,4 @@
 *.json
+!**benchmark_results.json
 *.bin
 *.hdf5

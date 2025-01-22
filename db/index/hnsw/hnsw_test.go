@@ -3,6 +3,7 @@ package hnsw
 import (
 	"fmt"
 	"math/rand/v2"
+	"sync"
 	"testing"
 	"vectordb/model"
 
@@ -93,4 +94,50 @@ func TestHNSWEdgeCases(t *testing.T) {
 	// non-existent vector
 	err = index.Delete("nonexistent")
 	assert.Error(t, err)
+}
+
+// RUN: go test -timeout 60m -count 50 -v -run ^TestConcurreny$ vectordb/db/index/hnsw
+func TestConcurreny(t *testing.T) {
+	params := &model.HNSWParams{
+		EfConstruction: 256,
+		MMax:           32,
+		Heuristic:      true,
+		MaxSize:        1000000,
+	}
+
+	index, err := NewHNSW(params, "cosine")
+	assert.NoError(t, err)
+
+	workers := 8
+	vectorCount := 50000
+	insertTasks := make(chan int, vectorCount)
+	var insertWg sync.WaitGroup
+
+	// prepare vectors
+	vectors := make([][]float32, vectorCount)
+	for i := 0; i < vectorCount; i++ {
+		vectors[i] = []float32{rand.Float32(), rand.Float32(), rand.Float32(), rand.Float32()}
+	}
+
+	// insert vectors
+	for i := 0; i < workers; i++ {
+		insertWg.Add(1)
+		go func(workerID int) {
+			defer insertWg.Done()
+			for i := range insertTasks {
+				id := fmt.Sprintf("vec%d", i)
+				err := index.Insert(id, vectors[i])
+				assert.NoError(t, err)
+			}
+		}(i)
+	}
+
+	for i := 0; i < vectorCount; i++ {
+		insertTasks <- i
+	}
+	close(insertTasks)
+	insertWg.Wait()
+
+	// insertions done
+	assert.Equal(t, vectorCount, len(index.nodes))
 }
