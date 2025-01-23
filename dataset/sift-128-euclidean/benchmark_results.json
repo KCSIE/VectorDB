@@ -1,0 +1,96 @@
+{
+  "dataset": "sift-128-euclidean",
+  "index_type": "hnsw",
+  "cases": {
+    "efc_128_m_24_ef_64": {
+      "insert_qps": 1029.3117777804443,
+      "insert_latency": 971522,
+      "insert_duration": 971522935603,
+      "vector_count": 1000000,
+      "search_qps": 1878.3371817989043,
+      "search_latency": 532385,
+      "search_duration": 5323857770,
+      "recall": 0.9593999999999984
+    },
+    "efc_192_m_24_ef_64": {
+      "insert_qps": 751.692841781569,
+      "insert_latency": 1330330,
+      "insert_duration": 1330330614337,
+      "vector_count": 1000000,
+      "search_qps": 2263.9149118990495,
+      "search_latency": 441712,
+      "search_duration": 4417127140,
+      "recall": 0.9608199999999985
+    },
+    "efc_256_m_16_ef_64": {
+      "insert_qps": 773.0134160244997,
+      "insert_latency": 1293638,
+      "insert_duration": 1293638608684,
+      "vector_count": 1000000,
+      "search_qps": 1164.8802244683095,
+      "search_latency": 858457,
+      "search_duration": 8584573581,
+      "recall": 0.9282899999999982
+    },
+    "efc_256_m_24_ef_64": {
+      "insert_qps": 692.2280460564922,
+      "insert_latency": 1444610,
+      "insert_duration": 1444610639076,
+      "vector_count": 1000000,
+      "search_qps": 2524.728715450538,
+      "search_latency": 396082,
+      "search_duration": 3960821588,
+      "recall": 0.9609199999999984
+    },
+    "efc_256_m_32_ef_64": {
+      "insert_qps": 562.513076319952,
+      "insert_latency": 1777736,
+      "insert_duration": 1777736451110,
+      "vector_count": 1000000,
+      "search_qps": 1337.1404817884352,
+      "search_latency": 747864,
+      "search_duration": 7478645764,
+      "recall": 0.9745599999999988
+    },
+    "efc_256_m_40_ef_64": {
+      "insert_qps": 403.26350997869315,
+      "insert_latency": 2479768,
+      "insert_duration": 2479768129908,
+      "vector_count": 1000000,
+      "search_qps": 757.3639913743857,
+      "search_latency": 1320369,
+      "search_duration": 13203690846,
+      "recall": 0.9773499999999989
+    },
+    "efc_256_m_8_ef_64": {
+      "insert_qps": 1201.676263430766,
+      "insert_latency": 832170,
+      "insert_duration": 832170885314,
+      "vector_count": 1000000,
+      "search_qps": 3153.716068031515,
+      "search_latency": 317086,
+      "search_duration": 3170862495,
+      "recall": 0.7866599999999991
+    },
+    "efc_320_m_24_ef_64": {
+      "insert_qps": 455.31217395377035,
+      "insert_latency": 2196295,
+      "insert_duration": 2196295327042,
+      "vector_count": 1000000,
+      "search_qps": 2216.6923580202615,
+      "search_latency": 451122,
+      "search_duration": 4511225910,
+      "recall": 0.9610899999999983
+    },
+    "efc_64_m_24_ef_64": {
+      "insert_qps": 1499.9108009871245,
+      "insert_latency": 666706,
+      "insert_duration": 666706313030,
+      "vector_count": 1000000,
+      "search_qps": 2184.3882583766253,
+      "search_latency": 457794,
+      "search_duration": 4577940740,
+      "recall": 0.9538799999999981
+    }
+  }
+}
